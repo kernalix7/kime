@@ -119,22 +119,21 @@ async fn indicator_server(file_path: &Path, color: IconColor) -> Result<()> {
         let _ = client.shutdown().await;
 
         // Read with timeout
-        match tokio::time::timeout(timeout, client.read_exact(&mut read_buf)).await {
-            Ok(Ok(_)) => {
-                if &read_buf == EXIT_MESSAGE {
-                    log::info!("Receive exit message");
-                    return Ok(());
-                }
-
-                current_bytes = read_buf;
-
-                handle
-                    .update(|tray| {
-                        tray.update_with_bytes(&current_bytes);
-                    })
-                    .await;
+        if let Ok(Ok(_)) =
+            tokio::time::timeout(timeout, client.read_exact(&mut read_buf)).await
+        {
+            if &read_buf == EXIT_MESSAGE {
+                log::info!("Receive exit message");
+                return Ok(());
             }
-            _ => {}
+
+            current_bytes = read_buf;
+
+            handle
+                .update(|tray| {
+                    tray.update_with_bytes(&current_bytes);
+                })
+                .await;
         }
     }
 }
@@ -146,7 +145,7 @@ async fn main() {
     let config = load_raw_config_from_config_dir().indicator;
     let run_dir = kime_run_dir::get_run_dir();
     let file_path = run_dir.join("kime-indicator.sock");
-    indicator_server(&file_path, config.icon_color)
-        .await
-        .unwrap();
+    if let Err(e) = indicator_server(&file_path, config.icon_color).await {
+        log::error!("Indicator server error: {}", e);
+    }
 }

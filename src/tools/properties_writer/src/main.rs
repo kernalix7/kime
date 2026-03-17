@@ -33,29 +33,35 @@ struct Browse {
 fn main() {
     let cc = std::env::var("CC").unwrap_or("gcc".into());
 
-    let ret = Command::new("whereis").arg(cc).output().unwrap().stdout;
-    let ret = String::from_utf8(ret).unwrap();
+    let ret = Command::new("whereis")
+        .arg(&cc)
+        .output()
+        .expect("Failed to run whereis")
+        .stdout;
+    let ret = String::from_utf8(ret).expect("whereis output is not valid UTF-8");
     let cc_path = ret.split(' ').nth(1).unwrap_or("/usr/bin/gcc");
 
     let ret = Command::new("pkg-config")
         .arg("--list-all")
         .output()
-        .unwrap()
+        .expect("Failed to run pkg-config; is it installed?")
         .stdout;
-    let ret = String::from_utf8(ret).unwrap();
+    let ret = String::from_utf8(ret).expect("pkg-config output is not valid UTF-8");
 
     let mut include_path = HashSet::new();
 
     let packages = ret.lines().filter_map(|l| l.split(' ').next());
 
     for package in packages {
-        let ret = Command::new("pkg-config")
+        let output = match Command::new("pkg-config")
             .arg("--cflags-only-I")
             .arg(package)
             .output()
-            .unwrap()
-            .stdout;
-        let ret = String::from_utf8(ret).unwrap();
+        {
+            Ok(o) => o,
+            Err(_) => continue,
+        };
+        let ret = String::from_utf8_lossy(&output.stdout);
         let paths = ret.split(' ');
 
         for path in paths {
@@ -63,7 +69,7 @@ fn main() {
                 continue;
             }
 
-            include_path.insert(path.split_at(2).1.trim_end_matches("\n").into());
+            include_path.insert(path.split_at(2).1.trim().into());
         }
     }
 

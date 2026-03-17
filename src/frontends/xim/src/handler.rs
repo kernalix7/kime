@@ -41,7 +41,8 @@ pub struct KimeHandler {
 impl KimeHandler {
     pub fn new(screen_num: usize, config: Config) -> Self {
         let (font_data, index, font_size) = &config.xim_preedit_font;
-        let font_vec = FontVec::try_from_vec_and_index(font_data.clone(), *index).unwrap();
+        let font_vec = FontVec::try_from_vec_and_index(font_data.clone(), *index)
+            .expect("Failed to load XIM preedit font; check xim_preedit_font config");
         let font = FontArc::from(font_vec);
 
         Self {
@@ -111,7 +112,11 @@ impl KimeHandler {
 
         if let Some(pe) = user_ic.user_data.pe.as_mut() {
             // Draw in server (already have pe_window)
-            let pe = self.preedit_windows.get_mut(pe).unwrap();
+            let Some(pe) = self.preedit_windows.get_mut(pe) else {
+                log::warn!("Preedit window not found in map, resetting pe state");
+                user_ic.user_data.pe = None;
+                return Ok(());
+            };
             pe.set_preedit(user_ic.user_data.engine.preedit_str());
             pe.refresh(server.conn())?;
         } else {
@@ -352,7 +357,7 @@ impl<C: HasConnection> ServerHandler<X11rbServer<C>> for KimeHandler {
             self.process_input_result(server, user_ic, ret)
         } else {
             log::warn!("Unknown hardware keycode: {}", xev.detail);
-            return Ok(false);
+            Ok(false)
         }
     }
 
@@ -364,10 +369,9 @@ impl<C: HasConnection> ServerHandler<X11rbServer<C>> for KimeHandler {
         log::info!("destroy_ic");
 
         if let Some(pe) = user_ic.user_data.pe {
-            self.preedit_windows
-                .remove(&pe)
-                .unwrap()
-                .clean(server.conn())?;
+            if let Some(w) = self.preedit_windows.remove(&pe) {
+                w.clean(server.conn())?;
+            }
         }
 
         Ok(())

@@ -76,8 +76,11 @@ fn main() -> Result<(), ()> {
         let _ = std::env::set_current_dir("/tmp");
 
         // Redirect stderr to file
-        unsafe {
-            nix::libc::dup2(stderr_file.as_raw_fd(), nix::libc::STDERR_FILENO);
+        let ret = unsafe {
+            nix::libc::dup2(stderr_file.as_raw_fd(), nix::libc::STDERR_FILENO)
+        };
+        if ret == -1 {
+            log::error!("Failed to redirect stderr: {}", std::io::Error::last_os_error());
         }
     }
 
@@ -141,12 +144,16 @@ fn main() -> Result<(), ()> {
     while RUN.load(SeqCst) {
         // Remove finished process
         for (name, process, exited) in processes.iter_mut() {
-            match process.try_wait().expect("Wait process") {
-                Some(status) => {
-                    log::info!("Process {} has exit with {}", name, status);
+            match process.try_wait() {
+                Ok(Some(status)) => {
+                    log::info!("Process {} has exited with {}", name, status);
                     *exited = true;
                 }
-                None => {}
+                Ok(None) => {} // still running
+                Err(err) => {
+                    log::error!("Failed to check process {}: {}", name, err);
+                    *exited = true;
+                }
             }
         }
 

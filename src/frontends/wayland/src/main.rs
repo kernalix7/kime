@@ -18,7 +18,10 @@ fn main() {
     let mut state = AppState::new(&conn);
 
     // Initial roundtrip to get globals
-    event_queue.roundtrip(&mut state).unwrap();
+    if let Err(e) = event_queue.roundtrip(&mut state) {
+        log::error!("Initial Wayland roundtrip failed: {}", e);
+        std::process::exit(1);
+    }
 
     log::debug!(
         "Globals: v2={}, vk={}, seat={}, v1={}",
@@ -34,7 +37,10 @@ fn main() {
         if let Err(e) = state.setup_input_method_v2(&qh) {
             log::warn!("input_method_v2 setup failed: {}, trying v1", e);
             if state.has_input_method_v1() {
-                state.setup_input_method_v1(&qh).unwrap();
+                if let Err(e) = state.setup_input_method_v1(&qh) {
+                    log::error!("input_method_v1 setup also failed: {}", e);
+                    std::process::exit(1);
+                }
             } else {
                 log::error!("No input method protocol available");
                 std::process::exit(1);
@@ -42,14 +48,20 @@ fn main() {
         }
     } else if state.has_input_method_v1() {
         log::info!("Using input_method_v1 protocol");
-        state.setup_input_method_v1(&qh).unwrap();
+        if let Err(e) = state.setup_input_method_v1(&qh) {
+            log::error!("input_method_v1 setup failed: {}", e);
+            std::process::exit(1);
+        }
     } else {
         log::error!("No input method protocol available (no zwp_input_method_manager_v2, zwp_virtual_keyboard_manager_v1, or zwp_input_method_v1 found)");
         std::process::exit(1);
     }
 
     // Roundtrip after setup
-    event_queue.roundtrip(&mut state).unwrap();
+    if let Err(e) = event_queue.roundtrip(&mut state) {
+        log::error!("Wayland roundtrip failed after setup: {}", e);
+        std::process::exit(1);
+    }
 
     log::info!("Server init success!");
 

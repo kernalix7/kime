@@ -1,4 +1,5 @@
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+#[repr(transparent)]
 pub struct Bgra(pub [u8; 4]);
 
 impl image::Pixel for Bgra {
@@ -37,10 +38,14 @@ impl image::Pixel for Bgra {
     }
 
     fn from_slice(slice: &[Self::Subpixel]) -> &Self {
+        // SAFETY: Bgra is a #[repr(transparent)] wrapper around [u8; 4] with alignment 1.
+        // The image crate guarantees slice.len() >= CHANNEL_COUNT (4).
+        // as_ptr() on a valid slice is never null.
         unsafe { slice.as_ptr().cast::<Self>().as_ref().unwrap_unchecked() }
     }
 
     fn from_slice_mut(slice: &mut [Self::Subpixel]) -> &mut Self {
+        // SAFETY: Same guarantees as from_slice; mutable access is exclusive.
         unsafe {
             slice
                 .as_mut_ptr()

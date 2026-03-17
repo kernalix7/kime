@@ -117,7 +117,10 @@ impl Check {
                 println!("Loading config path: {}", config_path.display());
 
                 let config: kime_engine_core::RawConfig = match serde_yaml::from_str(
-                    &std::fs::read_to_string(config_path).expect("Read config file"),
+                    &std::fs::read_to_string(&config_path).expect(&format!(
+                        "Read config file: {}",
+                        config_path.display()
+                    )),
                 ) {
                     Ok(config) => config,
                     Err(err) => return CondResult::Fail(format!("Can't parse config.yaml: {err}")),
@@ -135,8 +138,10 @@ impl Check {
                         println!("Loading translation layer config: {}", path.display());
 
                         let _translation_layer: KeyMap<Key> = match serde_yaml::from_str(
-                            &std::fs::read_to_string(path.as_path())
-                                .expect("Read translation layer config"),
+                            &std::fs::read_to_string(path.as_path()).expect(&format!(
+                                "Read translation layer config: {}",
+                                path.display()
+                            )),
                         ) {
                             Ok(c) => c,
                             Err(err) => {
@@ -151,14 +156,23 @@ impl Check {
 
                 CondResult::Ok
             }
-            Check::XModifier => match env::var("XDG_SESSION_TYPE").unwrap().as_str() {
-                "x11" => check_var(
-                    "XMODIFIERS",
-                    |v| v.contains("@im=kime"),
-                    "set XMODIFIERS=@im=kime",
-                ),
-                other => CondResult::Ignore(format!("Session type is {} not x11", other)),
-            },
+            Check::XModifier => {
+                match env::var("XDG_SESSION_TYPE") {
+                    Ok(session_type) => match session_type.as_str() {
+                        "x11" => check_var(
+                            "XMODIFIERS",
+                            |v| v.contains("@im=kime"),
+                            "set XMODIFIERS=@im=kime",
+                        ),
+                        other => {
+                            CondResult::Ignore(format!("Session type is {} not x11", other))
+                        }
+                    },
+                    Err(_) => CondResult::Ignore(
+                        "XDG_SESSION_TYPE is not set".into(),
+                    ),
+                }
+            }
             Check::GtkImModule => {
                 check_var("GTK_IM_MODULE", |v| v == "kime", "set GTK_IM_MODULE=kime")
             }
@@ -189,7 +203,16 @@ impl Check {
 
                     println!("Loading kwinrc: {}", config_path.display());
 
-                    let file = std::fs::File::open(config_path).expect("Open kwinrc");
+                    let file = match std::fs::File::open(&config_path) {
+                        Ok(f) => f,
+                        Err(err) => {
+                            return CondResult::Fail(format!(
+                                "Can't open {}: {}",
+                                config_path.display(),
+                                err
+                            ))
+                        }
+                    };
                     let lines = std::io::BufReader::new(file).lines();
 
                     let mut given_input_method = String::new();

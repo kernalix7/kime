@@ -249,7 +249,7 @@ gboolean filter_keypress(GtkIMContext *im, EventType *key) {
     }
   }
 
-  bool numlock = gdk_device_get_num_lock_state(device) == TRUE;
+  bool numlock = device ? gdk_device_get_num_lock_state(device) == TRUE : FALSE;
 
   KimeModifierState kime_state = 0;
 

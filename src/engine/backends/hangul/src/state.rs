@@ -63,6 +63,8 @@ impl HangulEngine {
     pub fn backspace(&mut self, addons: EnumSet<Addon>, commit_buf: &mut String) -> bool {
         if self.state.backspace(addons) {
             true
+        } else if self.word_buf.pop().is_some() {
+            true
         } else if commit_buf.pop().is_some() {
             true
         } else {
@@ -128,6 +130,7 @@ impl CharacterState {
     pub fn reset(&mut self) {
         self.cho = None;
         self.jung = None;
+        self.compose_jung = false;
         self.jong = None;
     }
 

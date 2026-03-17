@@ -37,9 +37,11 @@ impl<V: Copy> KeyMap<V> {
         }
     }
 
-    /// Key must don't have shift modifier
+    /// Only SHIFT modifier is stored in the keymap; keys with other modifiers are ignored
     pub fn insert(&mut self, key: Key, value: V) {
-        self.arr[key.code][key.state.bits() as usize] = Some(value);
+        if !key.state.intersects(!ModifierState::SHIFT) {
+            self.arr[key.code][key.state.bits() as usize] = Some(value);
+        }
     }
 }
 

@@ -14,9 +14,9 @@ pub fn get_run_dir() -> PathBuf {
 pub fn get_run_dir_impl() -> PathBuf {
     if let Ok(dir) = env::var("XDG_RUNTIME_DIR") {
         dir.into()
-    } else if let Ok(uid) = env::var("UID") {
-        PathBuf::from(format!("/tmp/kime-{}", uid))
     } else {
-        PathBuf::from("/tmp")
+        // SAFETY: getuid() is always safe to call and has no preconditions
+        let uid = unsafe { libc::getuid() };
+        PathBuf::from(format!("/tmp/kime-{}", uid))
     }
 }

@@ -92,6 +92,8 @@ pub unsafe extern "C" fn kime_engine_end_ready(engine: &mut InputEngine) -> Inpu
 /// Update layout state
 #[no_mangle]
 pub extern "C" fn kime_engine_update_layout_state(engine: &mut InputEngine) {
+    // Layout state update may fail on non-Linux platforms; safe to ignore
+    // as the caller (GTK/Qt frontend) handles logging.
     engine.update_layout_state().ok();
 }
 

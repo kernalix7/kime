@@ -131,7 +131,7 @@ fn load_unicode_annotations() -> quick_xml::Result<Vec<UnicodeEntry>> {
     loop {
         match reader.read_event()? {
             Event::Start(start) if start.name().0 == b"annotation" => {
-                let cp = start.attributes().next().unwrap()?;
+                let cp = start.attributes().next().expect("annotation element must have an attribute")?;
                 debug_assert_eq!(cp.key.0, b"cp");
                 let cp = cp.decode_and_unescape_value(reader.decoder())?;
                 if current_entry.cp != cp {
@@ -157,7 +157,10 @@ fn load_unicode_annotations() -> quick_xml::Result<Vec<UnicodeEntry>> {
 
 fn main() {
     let mut out = BufWriter::new(
-        std::fs::File::create(PathBuf::from(env::var("OUT_DIR").unwrap()).join("dict.rs")).unwrap(),
+        std::fs::File::create(
+            PathBuf::from(env::var("OUT_DIR").expect("OUT_DIR not set")).join("dict.rs"),
+        )
+        .expect("Failed to create dict.rs output file"),
     );
 
     writeln!(out, "use crate::math_symbol_key::*;").unwrap();
@@ -168,9 +171,15 @@ fn main() {
     .unwrap();
 
     for (k, values) in load_hanja_dict() {
-        write!(out, "(\"{}\", &[", k).unwrap();
+        write!(out, "(\"{}\", &[", k.escape_debug()).unwrap();
         for value in values {
-            write!(out, "(\"{}\", \"{}\"),", value.hanja, value.description).unwrap();
+            write!(
+                out,
+                "(\"{}\", \"{}\"),",
+                value.hanja.escape_debug(),
+                value.description.escape_debug()
+            )
+            .unwrap();
         }
         writeln!(out, "]),").unwrap();
     }
@@ -178,7 +187,8 @@ fn main() {
     writeln!(out, "];").unwrap();
 
     let symbol_map_data = include_str!("data/symbol_map.json");
-    let symbol_map_data: Vec<KeySymPair> = serde_json::from_str(symbol_map_data).unwrap();
+    let symbol_map_data: Vec<KeySymPair> =
+        serde_json::from_str(symbol_map_data).expect("Failed to parse symbol_map.json");
     let mut symbol_map: Vec<(SymbolKey, &str)> = Vec::new();
     for key_sym_pair in &symbol_map_data {
         let keyword = &key_sym_pair.keyword;
@@ -203,7 +213,7 @@ fn main() {
         "pub static UNICODE_ANNOTATIONS: &[UnicodeAnnotation] = &["
     )
     .unwrap();
-    for entry in load_unicode_annotations().unwrap() {
+    for entry in load_unicode_annotations().expect("Failed to load unicode annotations XML") {
         if !entry.cp.chars().any(|c| c.is_emoji_char()) {
             continue;
         }
@@ -211,7 +221,8 @@ fn main() {
         writeln!(
             out,
             "UnicodeAnnotation {{ codepoint: \"{}\", tts: \"{}\" }},",
-            entry.cp, entry.tts
+            entry.cp.escape_debug(),
+            entry.tts.escape_debug()
         )
         .unwrap()
     }

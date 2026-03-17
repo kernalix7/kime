@@ -27,11 +27,15 @@ fn main() {
             // event hasn't filtered
             Ok(false) => match e {
                 Event::Expose(e) => {
-                    handler.expose(e.window, server.conn()).unwrap();
+                    if let Err(err) = handler.expose(e.window, server.conn()) {
+                        log::error!("Expose error: {}", err);
+                    }
                     server.conn().flush().expect("Flush connection");
                 }
                 Event::ConfigureNotify(e) => {
-                    handler.configure_notify(e, server.conn()).unwrap();
+                    if let Err(err) = handler.configure_notify(e, server.conn()) {
+                        log::error!("ConfigureNotify error: {}", err);
+                    }
                     server.conn().flush().expect("Flush connection");
                 }
                 Event::UnmapNotify(..) => {}

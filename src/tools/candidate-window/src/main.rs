@@ -31,7 +31,7 @@ impl eframe::App for CandidateApp {
 
         macro_rules! num_hotkey {
             ($k:expr, $n:expr) => {
-                if ctx.input(|i| i.key_down($k)) {
+                if ctx.input(|i| i.key_down($k)) && $n <= self.max_page_index {
                     self.page_index = $n;
                 }
             };
@@ -88,16 +88,13 @@ impl eframe::App for CandidateApp {
                         .horizontal(|ui| {
                             ui.colored_label(egui::Color32::LIGHT_BLUE, key);
                             ui.separator();
-                            if ui.button(value).clicked() {
-                                true
-                            } else {
-                                false
-                            }
+                            ui.button(value).clicked()
                         })
                         .inner;
 
                     if quitted {
-                        self.stdout.write_all(key.as_bytes()).unwrap();
+                        let _ = self.stdout.write_all(key.as_bytes());
+                        let _ = self.stdout.flush();
                         ctx.send_viewport_cmd(egui::ViewportCommand::Close);
                         return;
                     }
@@ -114,11 +111,9 @@ impl eframe::App for CandidateApp {
                                 .color(egui::Color32::YELLOW),
                         )
                         .ui(ui);
-                    } else {
-                        if ui.button(format!("{}", i + 1)).clicked() {
-                            self.page_index = i;
-                        }
-                    };
+                    } else if ui.button(format!("{}", i + 1)).clicked() {
+                        self.page_index = i;
+                    }
                 }
             });
         });
@@ -182,7 +177,9 @@ fn main() -> io::Result<()> {
                 stdout,
                 page_index: 0,
                 key_state: KeyState::default(),
-                max_page_index: if candidate_list.len() % PAGE_SIZE == 0 {
+                max_page_index: if candidate_list.is_empty() {
+                    0
+                } else if candidate_list.len() % PAGE_SIZE == 0 {
                     (candidate_list.len() / PAGE_SIZE) - 1
                 } else {
                     candidate_list.len() / PAGE_SIZE

@@ -39,6 +39,8 @@ macro_rules! impl_traits {
 
         impl From<$ty> for char {
             fn from(c: $ty) -> char {
+                // SAFETY: All enum variants map to valid Unicode Hangul Jamo code points
+                // within the range starting at $first_ch.
                 unsafe { std::char::from_u32_unchecked($first_ch as u32 + c as u32) }
             }
         }
@@ -263,6 +265,9 @@ impl Choseong {
     pub const FILLER: char = '\u{115F}';
 
     pub fn compose(self, jung: Jungseong, jong: Option<Jongseong>) -> char {
+        // SAFETY: The formula produces values in the Hangul Syllables block (U+AC00..U+D7A3).
+        // Choseong has 19 variants (0..18), Jungseong has 21 (0..20), Jongseong has 27 (0..26).
+        // Maximum value: 0xAC00 + 18*588 + 20*28 + 27 = 0xD7A3, which is valid Unicode.
         unsafe {
             std::char::from_u32_unchecked(
                 0xAC00 + self as u32 * 588 + jung as u32 * 28 + jong.map_or(0, |j| j as u32 + 1),
@@ -304,7 +309,7 @@ impl Choseong {
             Self::SsangGiyeok if decompose_choseong_ssang => Some(Self::Giyeok),
             Self::SsangBieup if decompose_choseong_ssang => Some(Self::Bieup),
             Self::SsangSiot if decompose_choseong_ssang => Some(Self::Siot),
-            Self::SsangJieut if decompose_choseong_ssang => Some(Self::SsangJieut),
+            Self::SsangJieut if decompose_choseong_ssang => Some(Self::Jieut),
             Self::SsangDigeut if decompose_choseong_ssang => Some(Self::Digeut),
             _ => None,
         }
@@ -397,10 +402,12 @@ impl Jongseong {
             Self::SsangSiot if decompose_jongseong_ssang => Some(Self::Siot),
             Self::GiyeokSiot => Some(Self::Giyeok),
             Self::NieunHieuh | Self::NieunJieut => Some(Self::Nieun),
-            Self::RieulMieum
+            Self::RieulGiyeok
+            | Self::RieulMieum
             | Self::RieulBieup
             | Self::RieulSiot
             | Self::RieulTieut
+            | Self::RieulPieup
             | Self::RieulHieuh => Some(Self::Rieul),
             Self::BieupSiot => Some(Self::Bieup),
             _ => None,

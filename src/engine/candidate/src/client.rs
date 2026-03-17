@@ -18,7 +18,12 @@ impl Client {
             .stderr(Stdio::inherit())
             .spawn()?;
 
-        let mut stdin = BufWriter::new(child.stdin.take().unwrap());
+        let mut stdin = BufWriter::new(
+            child
+                .stdin
+                .take()
+                .expect("stdin must be piped for candidate process"),
+        );
 
         for (key, value) in candidate_list {
             stdin.write_all(key.as_bytes())?;
@@ -35,7 +40,12 @@ impl Client {
     }
 
     pub fn is_ready(&self) -> bool {
-        let stdout: BorrowedFd = self.child.stdout.as_ref().unwrap().as_fd();
+        let stdout: BorrowedFd = self
+            .child
+            .stdout
+            .as_ref()
+            .expect("stdout must be piped for candidate process")
+            .as_fd();
         let fds = &mut [PollFd::new(stdout, PollFlags::POLLIN)];
         poll::poll(fds, PollTimeout::from(200u16)) == Ok(1)
     }
@@ -45,6 +55,8 @@ impl Client {
             Ok(String::from_utf8(self.child.wait_with_output()?.stdout).ok())
         } else {
             self.child.kill()?;
+            // Reap the killed process to avoid zombie
+            let _ = self.child.wait();
             Ok(None)
         }
     }

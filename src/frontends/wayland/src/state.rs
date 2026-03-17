@@ -45,6 +45,16 @@ use xkbcommon::xkb::{
 
 const ZWP_TEXT_INPUT_V1_PREEDIT_STYLE_UNDERLINE: u32 = 5;
 
+/// XKB modifier bit masks (standard XKB positions)
+const XKB_MOD_SHIFT: u32 = 0x1;
+const XKB_MOD_CONTROL: u32 = 0x4;
+const XKB_MOD_ALT: u32 = 0x8;
+const XKB_MOD_NUMLOCK: u32 = 0x10;
+const XKB_MOD_SUPER: u32 = 0x40;
+
+/// Wayland key state value for repeated keys (not in the protocol enum)
+const WL_KEY_STATE_REPEATED: u32 = 2;
+
 /// Registry state for binding globals
 struct Globals {
     seat: Option<WlSeat>,
@@ -317,9 +327,6 @@ impl AppState {
             }
 
             // Emit key repeat event
-            let elapsed_ms = pressed_at.elapsed().as_millis() as u32;
-            let _time = wayland_time.wrapping_add(elapsed_ms);
-
             // Handle v2
             if let Some(ref mut im_state) = self.im_v2 {
                 if im_state.grab_activate {
@@ -632,8 +639,7 @@ impl Dispatch<ZwpInputMethodKeyboardGrabV2, ()> for AppState {
                 ..
             } => {
                 let is_pressed = matches!(key_state, WEnum::Value(KeyState::Pressed))
-                    || key_state == WEnum::Value(KeyState::Pressed)
-                    || matches!(&key_state, WEnum::Unknown(2)); // Repeated
+                    || matches!(&key_state, WEnum::Unknown(WL_KEY_STATE_REPEATED)); // Repeated
 
                 let grab_activate = state
                     .im_v2
@@ -698,20 +704,24 @@ impl Dispatch<ZwpInputMethodKeyboardGrabV2, ()> for AppState {
                 group,
                 ..
             } => {
+                // Effective modifier state combines all three XKB layers:
+                // depressed (held), latched (sticky), and locked (toggled)
+                let effective_mods = mods_depressed | mods_latched | mods_locked;
                 state.mod_state = ModifierState::empty();
-                if mods_depressed & 0x1 != 0 {
+                if effective_mods & XKB_MOD_SHIFT != 0 {
                     state.mod_state |= ModifierState::SHIFT;
                 }
-                if mods_depressed & 0x4 != 0 {
+                if effective_mods & XKB_MOD_CONTROL != 0 {
                     state.mod_state |= ModifierState::CONTROL;
                 }
-                if mods_depressed & 0x8 != 0 {
+                if effective_mods & XKB_MOD_ALT != 0 {
                     state.mod_state |= ModifierState::ALT;
                 }
-                if mods_depressed & 0x40 != 0 {
+                if effective_mods & XKB_MOD_SUPER != 0 {
                     state.mod_state |= ModifierState::SUPER;
                 }
-                state.numlock = mods_depressed & 0x10 != 0;
+                // Num Lock is a lock modifier — only appears in mods_locked
+                state.numlock = effective_mods & XKB_MOD_NUMLOCK != 0;
 
                 if let Some(ref im_state) = state.im_v2 {
                     im_state
@@ -834,6 +844,8 @@ impl Dispatch<WlKeyboard, ()> for AppState {
                 if let WEnum::Value(KeymapFormat::XkbV1) = format {
                     // fd is already OwnedFd in wayland-client 0.31, use it directly
                     if let Some(ref mut im_state) = state.im_v1 {
+                        // SAFETY: fd is a valid OwnedFd from the Wayland compositor,
+                        // and size matches the keymap data length.
                         im_state.keymap = unsafe {
                             Keymap::new_from_fd(
                                 &XkbContext::new(CONTEXT_NO_FLAGS),
@@ -854,7 +866,7 @@ impl Dispatch<WlKeyboard, ()> for AppState {
                 ..
             } => {
                 let is_pressed = matches!(key_state, WEnum::Value(KeyState::Pressed))
-                    || matches!(&key_state, WEnum::Unknown(2)); // Repeated
+                    || matches!(&key_state, WEnum::Unknown(WL_KEY_STATE_REPEATED)); // Repeated
 
                 let grab_activate = state
                     .im_v1
@@ -917,20 +929,21 @@ impl Dispatch<WlKeyboard, ()> for AppState {
                 group,
                 ..
             } => {
+                let effective_mods = mods_depressed | mods_latched | mods_locked;
                 state.mod_state = ModifierState::empty();
-                if mods_depressed & 0x1 != 0 {
+                if effective_mods & XKB_MOD_SHIFT != 0 {
                     state.mod_state |= ModifierState::SHIFT;
                 }
-                if mods_depressed & 0x4 != 0 {
+                if effective_mods & XKB_MOD_CONTROL != 0 {
                     state.mod_state |= ModifierState::CONTROL;
                 }
-                if mods_depressed & 0x8 != 0 {
+                if effective_mods & XKB_MOD_ALT != 0 {
                     state.mod_state |= ModifierState::ALT;
                 }
-                if mods_depressed & 0x40 != 0 {
+                if effective_mods & XKB_MOD_SUPER != 0 {
                     state.mod_state |= ModifierState::SUPER;
                 }
-                state.numlock = mods_depressed & 0x10 != 0;
+                state.numlock = effective_mods & XKB_MOD_NUMLOCK != 0;
 
                 state.modifiers_v1(mods_depressed, mods_latched, mods_locked, group);
             }

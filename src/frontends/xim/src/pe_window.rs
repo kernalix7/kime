@@ -71,7 +71,8 @@ impl PeWindow {
             .intern_atom(false, b"_NET_WM_WINDOW_TYPE\0")?
             .reply()?
             .atom;
-        let popup = conn
+        // DOCK type is used intentionally: prevents decoration, stays on top, no focus steal
+        let dock = conn
             .intern_atom(false, b"_NET_WM_WINDOW_TYPE_DOCK\0")?
             .reply()?
             .atom;
@@ -81,7 +82,7 @@ impl PeWindow {
             preedit_window,
             window_type,
             AtomEnum::ATOM,
-            &[popup],
+            &[dock],
         )?;
 
         conn.change_property8(
@@ -97,7 +98,8 @@ impl PeWindow {
         conn.flush()?;
 
         Ok(Self {
-            preedit_window: NonZeroU32::new(preedit_window).unwrap(),
+            preedit_window: NonZeroU32::new(preedit_window)
+                .expect("X11 window ID must not be zero"),
             preedit: String::with_capacity(10),
             gc,
             font,
@@ -108,6 +110,7 @@ impl PeWindow {
     }
 
     pub fn clean(self, conn: &impl Connection) -> Result<(), xim::ServerError> {
+        conn.free_gc(self.gc)?.ignore_error();
         conn.destroy_window(self.preedit_window.get())?
             .ignore_error();
         conn.flush()?;
